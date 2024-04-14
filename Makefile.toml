@@ -1,0 +1,81 @@
+[env]
+OSCAL_COMPLETE_SCHEMA = "oscal_complete_schema.json"
+USNISTGOV = "https://github.com/usnistgov/OSCAL/releases/download"
+SCHEMA_PATH = "schema"
+
+[tasks.fetch-schema]
+condition = { env_set = [
+    "SCHEMA_VER",
+], files_not_exist = [
+    "${SCHEMA_PATH}/${SCHEMA_VER}/${OSCAL_COMPLETE_SCHEMA}",
+] }
+cwd = "${CARGO_MAKE_WORKING_DIRECTORY}"
+script = '''
+#!/usr/bin/env zsh
+mkdir "${SCHEMA_PATH}/${SCHEMA_VER}"
+curl -L "${USNISTGOV}/${SCHEMA_VER}/${OSCAL_COMPLETE_SCHEMA}" -o "${SCHEMA_PATH}/${SCHEMA_VER}/${OSCAL_COMPLETE_SCHEMA}"
+'''
+
+[tasks.fetch-metaschema]
+condition = { files_not_exist = ["usnistgov/v0.10.0.zip"] }
+cwd = "${CARGO_MAKE_WORKING_DIRECTORY}"
+script = '''
+#!/usr/bin/env zsh
+mkdir usnistgov
+cd usnistgov
+curl -s -L "https://github.com/usnistgov/metaschema/archive/refs/tags/v0.10.0.zip" -o "v0.10.0.zip"
+unzip -q v0.10.0.zip
+'''
+
+
+[tasks.build-types]
+cwd = "${CARGO_MAKE_WORKING_DIRECTORY}/../oscal_types"
+command = "cargo"
+args = ["build"]
+
+[tasks.build-codegen]
+cwd = "${CARGO_MAKE_WORKING_DIRECTORY}/../oscal_codegen"
+command = "cargo"
+args = ["build"]
+dependencies = ["build-types", "fetch-schema"]
+
+[tasks.fedramp-automation]
+cwd = "${CARGO_MAKE_WORKING_DIRECTORY}"
+command = "git"
+args = [
+    "clone",
+    "--quiet",
+    "--depth",
+    "1",
+    "git@github.com:GSA/fedramp-automation.git",
+]
+condition = { files_not_exist = [
+    "${CARGO_MAKE_WORKING_DIRECTORY}/fedramp-automation",
+] }
+
+[tasks.oscal-content]
+cwd = "${CARGO_MAKE_WORKING_DIRECTORY}"
+command = "git"
+args = [
+    "clone",
+    "--quiet",
+    "--depth",
+    "1",
+    "--branch",
+    "v1.3.0",
+    "git@github.com:usnistgov/oscal-content.git",
+]
+condition = { files_not_exist = [
+    "${CARGO_MAKE_WORKING_DIRECTORY}/oscal-content",
+] }
+
+[tasks.fetch-test-repos]
+dependencies = ["fedramp-automation", "oscal-content"]
+
+[tasks.run-test]
+cwd = "${CARGO_MAKE_WORKING_DIRECTORY}"
+command = "cargo"
+args = ["test"]
+
+[tasks.test-lib]
+dependencies = ["fetch-test-repos", "run-test"]
